@@ -1,0 +1,128 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  EDITOR
+}
+
+enum ArticleStatus {
+  DRAFT
+  PENDING_REVIEW
+  PUBLISHED
+  ARCHIVED
+}
+
+model User {
+  id            Int      @id @default(autoincrement())
+  username      String   @unique
+  email         String   @unique
+  password      String
+  role          Role     @default(EDITOR)
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  
+  articles      Article[]
+  articleVersions ArticleVersion[]
+  
+  @@map("users")
+}
+
+model Category {
+  id            Int      @id @default(autoincrement())
+  name          String
+  slug          String   @unique
+  sortOrder     Int      @default(0)
+  parentId      Int?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  
+  parent        Category?   @relation("CategoryHierarchy", fields: [parentId], references: [id], onDelete: Cascade)
+  children      Category[]  @relation("CategoryHierarchy")
+  articles      Article[]
+  
+  @@map("categories")
+}
+
+model Tag {
+  id            Int      @id @default(autoincrement())
+  name          String   @unique
+  color         String   @default("#3b82f6")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  
+  articles      ArticleTag[]
+  
+  @@map("tags")
+}
+
+model Article {
+  id            Int            @id @default(autoincrement())
+  title         String
+  summary       String?
+  coverImage    String?
+  content       String         @default("")
+  categoryId    Int?
+  authorId      Int
+  status        ArticleStatus  @default(DRAFT)
+  customSlug    String?
+  metaTitle     String?
+  metaDescription String?
+  metaKeywords  String?
+  searchVector  Unsupported("tsvector")?
+  publishedAt   DateTime?
+  rejectionReason String?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  
+  category      Category?      @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  author        User           @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  tags          ArticleTag[]
+  versions      ArticleVersion[]
+  
+  @@index([searchVector], type: Gin)
+  @@map("articles")
+}
+
+model ArticleTag {
+  id            Int      @id @default(autoincrement())
+  articleId     Int
+  tagId         Int
+  
+  article       Article  @relation(fields: [articleId], references: [id], onDelete: Cascade)
+  tag           Tag      @relation(fields: [tagId], references: [id], onDelete: Cascade)
+  
+  @@unique([articleId, tagId])
+  @@map("article_tags")
+}
+
+model ArticleVersion {
+  id            Int            @id @default(autoincrement())
+  articleId     Int
+  versionNumber Int
+  title         String
+  summary       String?
+  content       String
+  coverImage    String?
+  categoryId    Int?
+  metaTitle     String?
+  metaDescription String?
+  metaKeywords  String?
+  tagIds        Int[]         @default([])
+  createdById   Int
+  createdAt     DateTime       @default(now())
+  changeMessage String?
+  
+  article       Article        @relation(fields: [articleId], references: [id], onDelete: Cascade)
+  createdBy     User           @relation(fields: [createdById], references: [id], onDelete: Cascade)
+  
+  @@unique([articleId, versionNumber])
+  @@map("article_versions")
+}
