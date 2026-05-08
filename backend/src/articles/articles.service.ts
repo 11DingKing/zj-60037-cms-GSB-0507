@@ -2,6 +2,7 @@ import { Injectable, NotFoundException, ForbiddenException, BadRequestException 
 import { PrismaService } from '../prisma/prisma.service';
 import { RedisService } from '../redis/redis.service';
 import { ArticleStatus, Role } from '@prisma/client';
+import { UpdateArticleDto } from './dto/update-article.dto';
 
 @Injectable()
 export class ArticlesService {
@@ -287,20 +288,7 @@ export class ArticlesService {
     return this.findOne(article.id);
   }
 
-  async update(id: number, data: {
-    title?: string;
-    summary?: string;
-    coverImage?: string;
-    content?: string;
-    categoryId?: number;
-    tagIds?: number[];
-    customSlug?: string;
-    metaTitle?: string;
-    metaDescription?: string;
-    metaKeywords?: string;
-    status?: ArticleStatus;
-    changeMessage?: string;
-  }, userId: number, userRole: Role) {
+  async update(id: number, data: UpdateArticleDto, userId: number, userRole: Role) {
     const existingArticle = await this.prisma.article.findUnique({
       where: { id },
       include: { tags: true },
