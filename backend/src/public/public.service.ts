@@ -150,9 +150,8 @@ export class PublicService {
         const additionalArticles = await this.prisma.article.findMany({
           where: {
             categoryId: article.categoryId,
-            id: { not: articleId },
             status: ArticleStatus.PUBLISHED,
-            id: { notIn: relatedArticles.map(a => a.id) },
+            id: { not: articleId, notIn: relatedArticles.map(a => a.id) },
           },
           include: {
             category: true,
