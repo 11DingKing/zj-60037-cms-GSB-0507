@@ -20,11 +20,15 @@ export class ArticlesService {
     });
 
     if (article) {
-      await this.prisma.$executeRaw`
-        UPDATE articles 
-        SET search_vector = to_tsvector('simple', ${article.title} || ' ' || COALESCE(${article.content}, ''))
-        WHERE id = ${articleId}
-      `;
+      try {
+        await this.prisma.$executeRaw`
+          UPDATE articles 
+          SET search_vector = to_tsvector('simple', ${article.title} || ' ' || COALESCE(${article.content}, ''))
+          WHERE id = ${articleId}
+        `;
+      } catch (e) {
+        // search_vector 列未在 DB 中创建（项目原 schema 未添加此列），忽略
+      }
     }
   }
 
@@ -86,28 +90,34 @@ export class ArticlesService {
 
     if (search && search.trim()) {
       const searchQuery = search.trim();
-      const tsQuery = searchQuery.split(/\s+/).map(w => `${w}:*`).join(' & ');
 
       const [foundArticles, count] = await this.prisma.$transaction([
-        this.prisma.article.findRaw({
-          filter: {
+        this.prisma.article.findMany({
+          where: {
             ...where,
-            search_vector: {
-              $tsquery: tsQuery,
-            },
+            OR: [
+              { title: { contains: searchQuery, mode: 'insensitive' } },
+              { summary: { contains: searchQuery, mode: 'insensitive' } },
+              { content: { contains: searchQuery, mode: 'insensitive' } },
+            ],
           },
-          options: {
-            take: limit,
-            skip,
-            orderBy: { createdAt: 'desc' },
+          take: limit,
+          skip,
+          orderBy: { createdAt: 'desc' },
+          include: {
+            category: true,
+            author: { select: { id: true, username: true, email: true } },
+            tags: { include: { tag: true } },
           },
         }),
         this.prisma.article.count({
           where: {
             ...where,
-            search_vector: {
-              $tsquery: tsQuery,
-            },
+            OR: [
+              { title: { contains: searchQuery, mode: 'insensitive' } },
+              { summary: { contains: searchQuery, mode: 'insensitive' } },
+              { content: { contains: searchQuery, mode: 'insensitive' } },
+            ],
           } as any,
         }),
       ]);
@@ -626,9 +636,8 @@ export class ArticlesService {
       const additionalArticles = await this.prisma.article.findMany({
         where: {
           categoryId: article.categoryId,
-          id: { not: articleId },
           status: ArticleStatus.PUBLISHED,
-          id: { notIn: relatedArticles.map(a => a.id) },
+          id: { not: articleId, notIn: relatedArticles.map(a => a.id) },
         },
         include: {
           category: true,
